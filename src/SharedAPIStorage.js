@@ -1,5 +1,5 @@
 // This is a library file that can be included to provide a consistent and intuitive
-// access to the games APIs.
+// asynchronous access to the games APIs.
 // It will provide an object `sharedAPIStorage` available in a userscripts context.
 
 // TODO: Check what happens if another tab / instance upgrades the Database
@@ -7,7 +7,18 @@
 // TODO: Implement methods for the LSSM APIs
 // TODO: Write documentation for this file (JSDoc)
 // TODO: Provide type definitions for API results
+// TODO: Investigate if decorators can be used to open the DB connection
+// TODO: Make the requests add Header to identify the script and its version via GM_Info
 // TODO: Discuss the necessity to access the (way faster) V1 API if the additional data of V2 API is not needed
+
+// Usage:
+// 1. In the userscript header include a @require rule:
+// // @require https://raw.githubusercontent.com/LUFSI/framework/refs/heads/main/src/SharedAPIStorage.js
+// 2. Optionally, add a hint for ESLint to avoid warnings:
+// /* global sharedAPIStorage */
+// 3. Interact with the API provided by sharedAPIStorage (e.g. to log all alliance members in console):
+// sharedAPIStorage.getAllianceMembers().then(users => console.log(users));
+
 
 // This defines the current version of the indexedDB.
 // Which each change to the database structure (e.g. a table is added or removed),
@@ -67,6 +78,10 @@ const INDEXES = {
  * A mission as it occurs within the /einsaetze.json (TODO)
  *
  * @typedef {Object} Mission
+ */
+
+/**
+ * @typedef {number | string | Date | BufferSource | IDBValidKey[]} IDBValidKey
  */
 
 /**
@@ -231,15 +246,12 @@ class SharedAPIStorage {
     }
 
     /**
-     * @param {IDBDatabase} db
-     */
-    #setDB(db) {
-        if (this.#db) return;
-        this.#db = db;
-    }
-
-    /**
-     * @param {(db: IDBDatabase) => void|Promise<void>} callback
+     * Opens a connection to the database and
+     * closes it once callback has been executed.
+     * Triggers a database upgrade if necessary.
+     *
+     * @param {(db: IDBDatabase) => void|Promise<void>} callback – a function that works with the open database connection
+     * @returns {Promise<void>} a promise once the callback has been executed and the connection has been closed
      */
     #openDB(callback) {
         this.#connections++;
@@ -256,7 +268,7 @@ class SharedAPIStorage {
 
                     request.addEventListener('success', () => {
                         if (upgradeNeeded) return;
-                        this.#setDB(request.result);
+                        this.#db = request.result;
                         return resolve(request.result);
                     });
                     request.addEventListener('error', () =>
@@ -265,7 +277,7 @@ class SharedAPIStorage {
 
                     request.addEventListener('upgradeneeded', async event => {
                         upgradeNeeded = true;
-                        this.#setDB(request.result);
+                        this.#db = request.result;
                         await this.#upgradeDB(event);
                         return resolve(request.result);
                     });
@@ -276,14 +288,29 @@ class SharedAPIStorage {
             .finally(() => this.#closeDB());
     }
 
-    #closeDB(connection) {
+    /**
+     * Mark the current connection as closed.
+     * Disconnects from the database if there are no more open connections.
+     */
+    #closeDB() {
         this.#connections--;
         if (this.#connections > 0) return;
         if (this.#db) this.#db.close();
         this.#db = null;
     }
 
-    #getEntry(table, key, index) {
+    /**
+     * TODO: find a way for better type-safety
+     * Gets a specific entry from a table.
+     * If an index is provided, use the index to get the entry.
+     * If the provided index is not unique, returns an array of entries.
+     *
+     * @param {string} table - the table to get the entry from
+     * @param {IDBValidKey} key - the key to search for
+     * @param {string} [index] - use this index instead of the keyPath
+     * @returns {Promise<*|Array<*>>} a promise that resolves to the unique entry or to an array of matching entries if a non-unique index has been passed
+     */
+    #getEntry(table, key, index = undefined) {
         return this.#openDB(db => {
             const tx = db.transaction(table, 'readonly');
             const store = tx.objectStore(table);
@@ -301,6 +328,12 @@ class SharedAPIStorage {
         });
     }
 
+    /**
+     * Gets all available keys of a table.
+     *
+     * @param {string} table - the table to get the keys of
+     * @returns {Promise<IDBValidKey[]>} - a promise that resolves to an array containing all keys of this table
+     */
     #getKeys(table) {
         return this.#openDB(db => {
             const tx = db.transaction(table, 'readonly');
@@ -315,6 +348,13 @@ class SharedAPIStorage {
         });
     }
 
+    /**
+     * Gets all entries of a table as an array or object.
+     *
+     * @param {string} table - the table to get the entries of
+     * @param {object} [boolean] - controls wether to return the entries as an array (false) or as an object where keys are determined by the keyPath (true)
+     * @returns {Promise<Array<*>|Object.<IDBValidKey, *>>} - a promise that resolves to either an array or an object representing all entries of the table
+     */
     #getTable(table, object = false) {
         return this.#openDB(db => {
             const tx = db.transaction(table, 'readonly');
