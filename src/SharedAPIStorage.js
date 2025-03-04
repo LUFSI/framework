@@ -75,12 +75,8 @@ const INDEXES = {
 
 /**
  * A mission as it occurs within the /einsaetze.json (TODO)
- *
- * @typedef {Object} Mission
- */
-
-/**
- * @typedef {number | string | Date | BufferSource | SharedAPIStorage~IDBValidKey[]} SharedAPIStorage~IDBValidKey
+ * @typedef {object} Mission
+ * @property {string} id - the unique ID of this mission type
  */
 
 /**
@@ -93,10 +89,13 @@ const INDEXES = {
  */
 class SharedAPIStorage {
     /**
+     * @typedef {(number | string | Date | BufferSource | Array<SharedAPIStorage~IDBValidKey>)} SharedAPIStorage~IDBValidKey
+     */
+
+    /**
      * This is the name of the indexedDB instance.
      * This MUST NOT be changed at any time as otherwise
      * a new indexedDB instance would be created.
-     *
      * @type {string}
      * @private
      */
@@ -109,7 +108,6 @@ class SharedAPIStorage {
      * permanently within the memory.
      * Additionally, closing the database allows other scripts or tabs to
      * also connect to the database, which otherwise wouldn't be possible.
-     *
      * @type {IDBDatabase | null}
      * @private
      */
@@ -120,7 +118,6 @@ class SharedAPIStorage {
      * We're tracking the amount of open connections in this attribute
      * to avoid closing the indexedDB when there are still
      * unfinished transactions and connections.
-     *
      * @type {number}
      * @private
      */
@@ -130,7 +127,6 @@ class SharedAPIStorage {
      * This methods upgrades the database if required.
      * Upgrading meens changing the structure such as adding or removing tables,
      * as well as adding or removing indexes.
-     *
      * @param {IDBVersionChangeEvent} event - the version change event that contains the old version number
      * @returns {Promise<void>} a Promise that resolves once all upgrade transactions completed.
      * @private
@@ -141,7 +137,6 @@ class SharedAPIStorage {
         /**
          * All transactions (creating or altering tables) are stored in this array.
          * The method returns a Promise which resolves once all transactions are completed.
-         *
          * @type {Array<Promise<void>>}
          */
         const transactions = [];
@@ -150,7 +145,6 @@ class SharedAPIStorage {
          * This function is a small helper for transactions.
          * It adds a Promise that resolves once the transaction
          * has completed to the transactions array.
-         *
          * @param {IDBTransaction} transaction - the altering transaction that must complete for the upgrade process to be marked as finished.
          * @returns {void}
          */
@@ -164,9 +158,8 @@ class SharedAPIStorage {
         /**
          * This function is a small helper.
          * It creates a table, optionally with a specific key path.
-         *
          * @param {string} table - the name of the table to be created
-         * @param {string} [keyPath] – the path to the attribute that should be used as a key (default: undefined = no keyPath)
+         * @param {string} [keyPath] - – the path to the attribute that should be used as a key (default: undefined = no keyPath)
          * @returns {IDBObjectStore} the created table (ObjectStore)
          */
         const createTable = (table, keyPath = undefined) =>
@@ -174,7 +167,6 @@ class SharedAPIStorage {
         /**
          * This function is a small helper.
          * It creates an index on a table (ObjectStore).
-         *
          * @param {IDBObjectStore} store - the table (ObjectStore) to create the index on
          * @param {string} index - the path to the attribute that should be used as an index
          * @param {boolean} unique - wether this attribute needs to be unique over all values in this table (default: true)
@@ -255,8 +247,7 @@ class SharedAPIStorage {
      * Opens a connection to the database and
      * closes it once callback has been executed.
      * Triggers a database upgrade if necessary.
-     *
-     * @param {SharedAPIStorage~OpenDBCallback} callback – a function that works with the open database connection
+     * @param {SharedAPIStorage~OpenDBCallback} callback - – a function that works with the open database connection
      * @returns {Promise<void>} a promise once the callback has been executed and the connection has been closed
      * @private
      */
@@ -312,7 +303,6 @@ class SharedAPIStorage {
      * Gets a specific entry from a table.
      * If an index is provided, use the index to get the entry.
      * If the provided index is not unique, returns an array of entries.
-     *
      * @param {string} table - the table to get the entry from
      * @param {SharedAPIStorage~IDBValidKey} key - the key to search for
      * @param {string} [index] - use this index instead of the keyPath
@@ -339,7 +329,6 @@ class SharedAPIStorage {
 
     /**
      * Gets all available keys of a table.
-     *
      * @param {string} table - the table to get the keys of
      * @returns {Promise<SharedAPIStorage~IDBValidKey[]>} - a promise that resolves to an array containing all keys of this table
      * @private
@@ -360,9 +349,9 @@ class SharedAPIStorage {
 
     /**
      * Gets all entries of a table as an array or object.
-     *
      * @param {string} table - the table to get the entries of
      * @param {object} [boolean] - controls wether to return the entries as an array (false) or as an object where keys are determined by the keyPath (true)
+     * @param object
      * @returns {Promise<Array<*>|Object.<SharedAPIStorage~IDBValidKey, *>>} - a promise that resolves to either an array or an object representing all entries of the table
      * @private
      */
@@ -398,7 +387,6 @@ class SharedAPIStorage {
     // region lastUpdates
     /**
      * Stores the current timestamp to indicate this has been the last update of a table
-     *
      * @param {string} api - the api this last update indicates
      * @private
      */
@@ -410,16 +398,26 @@ class SharedAPIStorage {
         });
     }
 
+    /**
+     * @param table
+     */
     #getLastUpdate(table) {
         return this.#getEntry(TABLES.lastUpdates, table).then(res => res || 0);
     }
 
+    /**
+     * @param table
+     * @param treshhold
+     */
     async #needsUpdate(table, treshhold) {
         return Date.now() - (await this.#getLastUpdate(table)) > treshhold;
     }
     // endregion
 
     // region missionTypes
+    /**
+     *
+     */
     async #updateMissionTypes() {
         const table = TABLES.missionTypes;
 
@@ -449,6 +447,7 @@ class SharedAPIStorage {
     }
 
     /**
+     * @param id
      * @returns {Promise<Record<string, Mission>>}
      */
     async getMissionTypes(id) {
@@ -470,6 +469,10 @@ class SharedAPIStorage {
     // endregion
 
     // region simple APIs (userinfo, allianceinfo, settings)
+    /**
+     * @param table
+     * @param endpoint
+     */
     async #updateSimpleAPI(table, endpoint) {
         if (!(await this.#needsUpdate(table, FIVE_MINUTES))) return;
 
@@ -490,6 +493,9 @@ class SharedAPIStorage {
             );
     }
 
+    /**
+     *
+     */
     #updateAllianceInfo() {
         const membersTable = TABLES.allianceMembers;
         return this.#updateSimpleAPI(TABLES.allianceInfo, 'allianceinfo').then(
@@ -518,6 +524,9 @@ class SharedAPIStorage {
         );
     }
 
+    /**
+     * @param key
+     */
     async getUserInfo(key) {
         const table = TABLES.userInfo;
         await this.#updateSimpleAPI(table, 'userinfo');
@@ -525,6 +534,9 @@ class SharedAPIStorage {
         else return this.#getTable(table, true);
     }
 
+    /**
+     * @param key
+     */
     async getAllianceInfo(key) {
         const table = INDEXES.allianceMembers.name;
         await this.#updateAllianceInfo();
@@ -532,6 +544,9 @@ class SharedAPIStorage {
         else return this.#getTable(table, true);
     }
 
+    /**
+     * @param key
+     */
     async getSettings(key) {
         const table = TABLES.settings;
         await this.#updateSimpleAPI(table, 'settings');
@@ -539,6 +554,9 @@ class SharedAPIStorage {
         else return this.#getTable(table, true);
     }
 
+    /**
+     * @param nameOrId
+     */
     async getAllianceMembers(nameOrId) {
         await this.#updateAllianceInfo();
         const table = TABLES.allianceMembers;
@@ -555,6 +573,9 @@ class SharedAPIStorage {
     // endregion
 
     // region allianceEventTypes
+    /**
+     *
+     */
     async #updateAllianceEventTypes() {
         const table = TABLES.allianceEventTypes;
 
@@ -578,6 +599,9 @@ class SharedAPIStorage {
             .then(() => this.#setLastUpdate(table));
     }
 
+    /**
+     * @param nameOrId
+     */
     async getAllianceEventTypes(nameOrId) {
         await this.#updateAllianceEventTypes();
         const table = TABLES.allianceEventTypes;
@@ -593,6 +617,10 @@ class SharedAPIStorage {
     }
     // endregion
 
+    /**
+     * @param api
+     * @param id
+     */
     async *#fetchV2API(api, id) {
         let nextPage = `/api/v2/${api}${id ? `/${id}` : ''}`;
         while (nextPage) {
@@ -605,6 +633,12 @@ class SharedAPIStorage {
         }
     }
 
+    /**
+     * @param table
+     * @param endpoint
+     * @param id
+     * @param callback
+     */
     async #updateV2API(table, endpoint, id, callback) {
         const single = void 0 !== id;
         if (!single && !(await this.#needsUpdate(table, FIVE_MINUTES))) return;
@@ -649,6 +683,10 @@ class SharedAPIStorage {
         }
     }
 
+    /**
+     * @param id
+     * @param callback
+     */
     async getVehicles(id, callback) {
         const table = TABLES.vehicles;
         await this.#updateV2API(table, 'vehicles', id, callback);
@@ -657,6 +695,10 @@ class SharedAPIStorage {
         else return this.#getTable(table);
     }
 
+    /**
+     * @param vehicleType
+     * @param callback
+     */
     async getVehiclesOfType(vehicleType, callback) {
         const table = TABLES.vehicles;
         await this.#updateV2API(table, 'vehicles', undefined, callback);
@@ -664,6 +706,9 @@ class SharedAPIStorage {
         return this.#getEntry(table, vehicleType, INDEXES.vehicles.vehicleType);
     }
 
+    /**
+     * @param id
+     */
     async #updateBuildings(id) {
         const table = TABLES.buildings;
         const single = void 0 !== id;
@@ -697,6 +742,9 @@ class SharedAPIStorage {
             .then(() => this.#setLastUpdate(table));
     }
 
+    /**
+     * @param id
+     */
     async getBuildings(id) {
         await this.#updateBuildings(id);
 
@@ -704,6 +752,9 @@ class SharedAPIStorage {
         else return this.#getTable(TABLES.buildings);
     }
 
+    /**
+     * @param buildingType
+     */
     async getBuldingsOfType(buildingType) {
         await this.#updateBuildings();
 
@@ -714,6 +765,9 @@ class SharedAPIStorage {
         );
     }
 
+    /**
+     * @param dispatchCenterId
+     */
     async getBuildingsOfDispatchCenter(dispatchCenterId) {
         await this.#updateBuildings();
 
