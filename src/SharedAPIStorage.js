@@ -19,7 +19,6 @@
 // 3. Interact with the API provided by sharedAPIStorage (e.g. to log all alliance members in console):
 // sharedAPIStorage.getAllianceMembers().then(users => console.log(users));
 
-
 // This defines the current version of the indexedDB.
 // Which each change to the database structure (e.g. a table is added or removed),
 // This needs to be incremented by 1.
@@ -81,15 +80,16 @@ const INDEXES = {
  */
 
 /**
- * @typedef {number | string | Date | BufferSource | IDBValidKey[]} IDBValidKey
+ * @typedef {number | string | Date | BufferSource | SharedAPIStorage~IDBValidKey[]} SharedAPIStorage~IDBValidKey
  */
 
 /**
  * A class that provides a central interface for interacting with the games API.
- * It handles everything needed in order to store the API results within an indexedDB.
+ * It handles everything needed in order to store the API results within an {@link https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API|indexedDB}.
  * It also makes the required network requests to fetch new API results.
  * The methods exposed to the outside allow getting a whole API as well as
  * searching through API results in an efficient way (at least for specific keys).
+ * The general usage is described in the {@tutorial SharedAPIStorage} tutorial.
  */
 class SharedAPIStorage {
     /**
@@ -142,7 +142,7 @@ class SharedAPIStorage {
          * All transactions (creating or altering tables) are stored in this array.
          * The method returns a Promise which resolves once all transactions are completed.
          *
-         * @type {Promise<void>[}
+         * @type {Array<Promise<void>>}
          */
         const transactions = [];
 
@@ -246,12 +246,19 @@ class SharedAPIStorage {
     }
 
     /**
+     * @callback SharedAPIStorage~OpenDBCallback
+     * @param {IDBDatabase} db
+     * @returns {(void|Promise<void>)}
+     */
+
+    /**
      * Opens a connection to the database and
      * closes it once callback has been executed.
      * Triggers a database upgrade if necessary.
      *
-     * @param {(db: IDBDatabase) => void|Promise<void>} callback – a function that works with the open database connection
+     * @param {SharedAPIStorage~OpenDBCallback} callback – a function that works with the open database connection
      * @returns {Promise<void>} a promise once the callback has been executed and the connection has been closed
+     * @private
      */
     #openDB(callback) {
         this.#connections++;
@@ -291,6 +298,7 @@ class SharedAPIStorage {
     /**
      * Mark the current connection as closed.
      * Disconnects from the database if there are no more open connections.
+     * @private
      */
     #closeDB() {
         this.#connections--;
@@ -306,9 +314,10 @@ class SharedAPIStorage {
      * If the provided index is not unique, returns an array of entries.
      *
      * @param {string} table - the table to get the entry from
-     * @param {IDBValidKey} key - the key to search for
+     * @param {SharedAPIStorage~IDBValidKey} key - the key to search for
      * @param {string} [index] - use this index instead of the keyPath
      * @returns {Promise<*|Array<*>>} a promise that resolves to the unique entry or to an array of matching entries if a non-unique index has been passed
+     * @private
      */
     #getEntry(table, key, index = undefined) {
         return this.#openDB(db => {
@@ -332,7 +341,8 @@ class SharedAPIStorage {
      * Gets all available keys of a table.
      *
      * @param {string} table - the table to get the keys of
-     * @returns {Promise<IDBValidKey[]>} - a promise that resolves to an array containing all keys of this table
+     * @returns {Promise<SharedAPIStorage~IDBValidKey[]>} - a promise that resolves to an array containing all keys of this table
+     * @private
      */
     #getKeys(table) {
         return this.#openDB(db => {
@@ -353,7 +363,8 @@ class SharedAPIStorage {
      *
      * @param {string} table - the table to get the entries of
      * @param {object} [boolean] - controls wether to return the entries as an array (false) or as an object where keys are determined by the keyPath (true)
-     * @returns {Promise<Array<*>|Object.<IDBValidKey, *>>} - a promise that resolves to either an array or an object representing all entries of the table
+     * @returns {Promise<Array<*>|Object.<SharedAPIStorage~IDBValidKey, *>>} - a promise that resolves to either an array or an object representing all entries of the table
+     * @private
      */
     #getTable(table, object = false) {
         return this.#openDB(db => {
@@ -385,11 +396,17 @@ class SharedAPIStorage {
     }
 
     // region lastUpdates
-    #setLastUpdate(table) {
+    /**
+     * Stores the current timestamp to indicate this has been the last update of a table
+     *
+     * @param {string} api - the api this last update indicates
+     * @private
+     */
+    #setLastUpdate(api) {
         return this.#openDB(db => {
             const tx = db.transaction(TABLES.lastUpdates, 'readwrite');
             const store = tx.objectStore(TABLES.lastUpdates);
-            store.put(Date.now(), table);
+            store.put(Date.now(), api);
         });
     }
 
