@@ -5,11 +5,13 @@
 // TODO: Check what happens if another tab / instance upgrades the Database
 // TODO: Implement methods for all APIs of the game
 // TODO: Implement methods for the LSSM APIs
+// TODO: Implement error handling
 // TODO: Write documentation for this file (JSDoc)
 // TODO: Provide type definitions for API results
 // TODO: Investigate if decorators can be used to open the DB connection
 // TODO: Make the requests add Header to identify the script and its version via GM_Info
 // TODO: Discuss the necessity to access the (way faster) V1 API if the additional data of V2 API is not needed
+// TODO: V2-API must adjust the limits if requests are failing
 
 // Usage:
 // 1. In the userscript header include a @require rule:
@@ -399,10 +401,13 @@ class SharedAPIStorage {
     }
 
     /**
-     * @param table
+     * Returns the timestamp of the last update of a table
+     * @param {string} api - the api to get the last update of
+     * @returns {number} the timestamp of the last update
+     * @private
      */
-    #getLastUpdate(table) {
-        return this.#getEntry(TABLES.lastUpdates, table).then(res => res || 0);
+    #getLastUpdate(api) {
+        return this.#getEntry(TABLES.lastUpdates, api).then(res => res || 0);
     }
 
     /**
