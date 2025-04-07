@@ -89,6 +89,23 @@ const INDEXES = {
     },
 };
 
+/* global GM_info:readonly */
+
+const fetch = endpoint =>
+    window.fetch(endpoint, {
+        headers: {
+            'X-LUFSI': `SharedAPIStorage (version ${CURRENT_DB_VERSION})`,
+            'X-SCRIPT-NAME':
+                typeof GM_info !== 'undefined' ?
+                    GM_info.script.name
+                :   'Unknown script',
+            'X-SCRIPT-VERSION':
+                typeof GM_info !== 'undefined' ?
+                    GM_info.script.version
+                :   'Unknown script',
+        },
+    });
+
 // Let's start with some type definitions first.
 // This helps us improving the overall code quality.
 // Type definitions may be outsourced to their own repository or file some day.
