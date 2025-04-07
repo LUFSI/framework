@@ -25,8 +25,8 @@
 // Which each change to the database structure (e.g. a table is added or removed),
 // This needs to be incremented by 1.
 // Within the SharedAPIStorage.#upgradDB method, this constant wil lbe used
-// to determine which changes needs to be applied to the respective DB isntance.
-const CURRENT_DB_VERSION = 3;
+// to determine which changes needs to be applied to the respective DB instance.
+const CURRENT_DB_VERSION = 4;
 
 // Some consants that define several commonly used durations in ms.
 const ONE_MINUTE = 60 * 1000;
@@ -49,6 +49,20 @@ const TABLES = {
     allianceMembers: 'allianceMembers',
     vehicles: 'vehicles',
     buildings: 'buildings',
+    vehicleDistances: 'vehicleDistances',
+    equipments: 'equipments',
+    // allianceBuilding
+    // schoolings
+    // allianceSchoolings
+    // AAOCategories
+    // AAOs
+
+    // LSSM:
+    // vehicleTypes
+    // buildingTypes
+    // schoolings
+    // ranks
+    // pois
 };
 
 // We're defining the indexes used within the indexedDB here.
@@ -68,6 +82,10 @@ const INDEXES = {
     buildings: {
         dispatchCenter: 'leitstelle_building_id',
         buildingType: 'building_type',
+    },
+    equipments: {
+        equipmentType: 'equipment_type',
+        buildingId: 'building_id',
     },
 };
 
@@ -229,6 +247,23 @@ class SharedAPIStorage {
                     const store = createTable(TABLES.buildings, 'id');
                     createIndex(store, INDEXES.buildings.dispatchCenter, false);
                     createIndex(store, INDEXES.buildings.buildingType, false);
+
+                    return store.transaction;
+                })()
+            );
+        }
+
+        // In version 4, we introduced:
+        // * storing vehicle_distances
+        if (oldVersion < 4) {
+            addTransaction(
+                createTable(TABLES.vehicleDistances, 'vehicle_id').transaction
+            );
+            addTransaction(
+                (() => {
+                    const store = createTable(TABLES.equipments, 'id');
+                    createIndex(store, INDEXES.equipments.equipmentType, false);
+                    createIndex(store, INDEXES.equipments.buildingId, false);
 
                     return store.transaction;
                 })()
@@ -577,6 +612,59 @@ class SharedAPIStorage {
     }
     // endregion
 
+    // region equipments
+    /**
+     *
+     */
+    async #updateEquipments() {
+        const table = TABLES.equipments;
+        if (!(await this.#needsUpdate(table, FIVE_MINUTES))) return;
+
+        return fetch(`/api/equipments`)
+            .then(res => res.json())
+            .then(result =>
+                this.#openDB(db => {
+                    const tx = db.transaction(table, 'readwrite');
+                    const store = tx.objectStore(table);
+                    result.forEach(equipment => store.put(equipment));
+                    return new Promise((resolve, reject) => {
+                        tx.addEventListener('complete', () => resolve(result));
+                        tx.addEventListener('error', () => reject(tx.error));
+                    });
+                }).then(result => this.#setLastUpdate(table).then(() => result))
+            );
+    }
+
+    /**
+     * @param typeOrId
+     */
+    async getEquipments(typeOrId) {
+        await this.#updateEquipments();
+        const table = TABLES.equipments;
+        if (typeof typeOrId === 'number')
+            return this.#getEntry(table, typeOrId);
+        else if (typeof typeOrId === 'string')
+            return this.#getEntry(
+                table,
+                typeOrId,
+                INDEXES.equipments.equipmentType
+            );
+        else return this.#getTable(table);
+    }
+
+    /**
+     * @param id
+     */
+    async getEquipmentsAtBuilding(id) {
+        await this.#updateEquipments();
+        return this.#getEntry(
+            TABLES.equipments,
+            id,
+            INDEXES.equipments.buildingId
+        );
+    }
+    // endregion
+
     // region allianceEventTypes
     /**
      *
@@ -619,6 +707,42 @@ class SharedAPIStorage {
                 INDEXES.allianceEventTypes.name
             );
         else return this.#getTable(table);
+    }
+    // endregion
+
+    // region vehicleDistances
+    /**
+     *
+     */
+    async #updateVehicleDistances() {
+        const table = TABLES.vehicleDistances;
+
+        if (!(await this.#needsUpdate(table, FIVE_MINUTES))) return;
+
+        return fetch('/api/v1/vehicle_distances')
+            .then(res => res.json())
+            .then(({ result: distances }) =>
+                this.#openDB(db => {
+                    const tx = db.transaction(table, 'readwrite');
+                    const store = tx.objectStore(table);
+                    distances.forEach(vehicle => store.put(vehicle));
+                    return new Promise((resolve, reject) => {
+                        tx.addEventListener('complete', () => resolve());
+                        tx.addEventListener('error', () => reject(tx.error));
+                    });
+                })
+            )
+            .then(() => this.#setLastUpdate(table));
+    }
+
+    /**
+     * @param id
+     */
+    async getVehicleDistances(id) {
+        await this.#updateVehicleDistances();
+        const table = TABLES.vehicleDistances;
+        if (id) return this.#getEntry(table, id);
+        else return this.#getTable(table, true);
     }
     // endregion
 
