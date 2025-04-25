@@ -875,6 +875,15 @@ class SharedAPIStorage {
     }
 
     /**
+     *
+     */
+    getVehiclesCount() {
+        return fetch('/api/v2/vehicles?limit=2')
+            .then(res => res.json())
+            .then(res => res.paging.count_total);
+    }
+
+    /**
      * @param id
      */
     async #updateBuildings(id) {
