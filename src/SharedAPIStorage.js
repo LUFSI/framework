@@ -163,6 +163,25 @@ class SharedAPIStorage {
      * @private
      */
     #connections = 0;
+    /**
+     * How many vehicles should be loaded at once with V2-API?
+     * For very large accounts, the default 10k limit throws timeouts thus we need some system
+     * to reduce this limit more or less intelligent
+     * @type {number}
+     * @private
+     */
+    #v2VehiclesLimit = 10_000;
+
+    /**
+     * Initializes the SharedAPIStorage and adjusts some internal state if necessary
+     */
+    constructor() {
+        // Adjust the limit vor vehicles v2 API if the user has a large amount of vehicles.
+        // This is no efficient, intelligent or dynamic algorithm, it just aims to work in most use-cases so far.
+        this.getVehiclesCount().then(
+            count => (this.#v2VehiclesLimit /= Math.ceil(count / 50_000))
+        );
+    }
 
     /**
      * This methods upgrades the database if required.
@@ -772,7 +791,10 @@ class SharedAPIStorage {
      * @param id
      */
     async *#fetchV2API(api, id) {
-        let nextPage = `/api/v2/${api}${id ? `/${id}` : ''}`;
+        const limit = api === 'vehicles' ? this.#v2VehiclesLimit : undefined;
+        const idString = id ? `/${id}` : '';
+        const limitString = limit ? `?limit=${limit}` : '';
+        let nextPage = `/api/v2/${api}${idString}${limitString}`;
         while (nextPage) {
             yield await fetch(nextPage)
                 .then(res => res.json())
@@ -866,7 +888,7 @@ class SharedAPIStorage {
         const table = TABLES.vehicles;
         await this.#updateV2API(
             table,
-            'buildings/' + buildingId + '/vehicles',
+            `buildings/${buildingId}/vehicles`,
             true,
             callback
         );
@@ -892,7 +914,7 @@ class SharedAPIStorage {
 
         if (!single && !(await this.#needsUpdate(table, FIVE_MINUTES))) return;
 
-        return fetch('/api/buildings' + (id ? `/${id}` : ''))
+        return fetch(`/api/buildings${id ? `/${id}` : ''}`)
             .then(res => res.json())
             .then(buildings =>
                 this.#openDB(async db => {

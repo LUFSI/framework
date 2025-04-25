@@ -21,6 +21,7 @@ export default [
             },
         },
         rules: {
+            'prefer-template': 'warn',
             'jsdoc/require-asterisk-prefix': 'warn',
             'jsdoc/no-blank-block-descriptions': 'warn',
             'jsdoc/no-blank-blocks': 'warn',
