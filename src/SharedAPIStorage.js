@@ -91,6 +91,10 @@ const INDEXES = {
 
 /* global GM_info:readonly */
 
+/**
+ * @param endpoint
+ */
+// eslint-disable-next-line no-redeclare
 const fetch = endpoint =>
     window.fetch(endpoint, {
         headers: {
@@ -782,10 +786,12 @@ class SharedAPIStorage {
     /**
      * @param table
      * @param endpoint
-     * @param id
+     * @param idOrPartial
      * @param callback
      */
-    async #updateV2API(table, endpoint, id, callback) {
+    async #updateV2API(table, endpoint, idOrPartial, callback) {
+        const partial = idOrPartial === true || void 0 !== idOrPartial;
+        const id = idOrPartial === true ? void 0 : idOrPartial;
         const single = void 0 !== id;
         if (!single && !(await this.#needsUpdate(table, FIVE_MINUTES))) return;
 
@@ -796,7 +802,7 @@ class SharedAPIStorage {
             await this.#openDB(db => {
                 const tx = db.transaction(table, 'readwrite');
                 const store = tx.objectStore(table);
-                if (single) store.put(result);
+                if (!Array.isArray(result)) store.put(result);
                 else
                     result.forEach(item => {
                         currentIDs.add(item.id);
@@ -810,7 +816,7 @@ class SharedAPIStorage {
             callback?.(result);
         }
 
-        if (!single) {
+        if (!partial) {
             await this.#setLastUpdate(table);
 
             const deletedItems = storedIDs.difference(currentIDs);
@@ -850,6 +856,22 @@ class SharedAPIStorage {
         await this.#updateV2API(table, 'vehicles', undefined, callback);
 
         return this.#getEntry(table, vehicleType, INDEXES.vehicles.vehicleType);
+    }
+
+    /**
+     * @param buildingId
+     * @param callback
+     */
+    async getVehiclesAtBuilding(buildingId, callback) {
+        const table = TABLES.vehicles;
+        await this.#updateV2API(
+            table,
+            'buildings/' + buildingId + '/vehicles',
+            true,
+            callback
+        );
+
+        return this.#getEntry(table, buildingId, INDEXES.vehicles.building);
     }
 
     /**
